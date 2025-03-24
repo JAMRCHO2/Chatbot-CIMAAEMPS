@@ -1,46 +1,38 @@
-import streamlit as st
 import requests
+import streamlit as st
 
-st.title("Chatbot de medicamentos - AEMPS CIMA")
-st.write("Consulta cualquier medicamento autorizado en España.")
+st.set_page_config(page_title="Chatbot Medicamentos CIMA", layout="centered")
+st.title("💊 Chatbot de Medicamentos - CIMA")
+st.write("Escribe el nombre de un medicamento autorizado en España y obtendrás información oficial del CIMA.")
 
-nombre = st.text_input("🔎 Escribe el nombre del medicamento")
+nombre = st.text_input("🔎 ¿Qué medicamento quieres consultar?")
 
 def buscar_medicamento(nombre):
     url = f"https://cima.aemps.es/cima/rest/medicamentos?nombre={nombre}"
     response = requests.get(url)
     if response.status_code == 200:
-        return response.json().get("resultados", [])
-    return []
+        resultados = response.json().get("resultados", [])
+        if resultados:
+            med = resultados[0]
+            nregistro = med.get("nregistro")
+            detalle_url = f"https://cima.aemps.es/cima/rest/medicamento/{nregistro}"
+            detalle_resp = requests.get(detalle_url)
+            if detalle_resp.status_code == 200:
+                detalle = detalle_resp.json()
+                return f"""
+**💊 Nombre:** {med.get('nombre')}
+**🔢 Registro:** {med.get('nregistro')}
+**🏭 Laboratorio:** {detalle.get('titular')}
+**🧬 Principio activo:** {detalle.get('principiosActivos')}
+**💉 Vía de administración:** {detalle.get('viaAdministracion')}
+**📄 Estado de autorización:** {detalle.get('estado_autorizacion')}
 
-def obtener_info_detallada(nregistro):
-    url = f"https://cima.aemps.es/cima/rest/medicamento/{nregistro}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    return {}
+[📘 Ficha técnica]({"https://cima.aemps.es/cima/dochtml/" + detalle["docs"][0]["nombreArchivo"] if detalle.get("docs") else "No disponible"})
+"""
+        else:
+            return "No se encontraron medicamentos con ese nombre."
+    return "❌ Error al consultar la API del CIMA."
 
 if nombre:
-    resultados = buscar_medicamento(nombre)
-    
-    if resultados:
-        st.success(f"Se encontraron {len(resultados)} resultados. Mostrando el primero:")
-        medicamento = resultados[0]
-        detalle = obtener_info_detallada(medicamento["nregistro"])
-
-        st.subheader(medicamento["nombre"])
-        st.write(f"**Registro:** {medicamento['nregistro']}")
-        st.write(f"**Código Nacional (CN):** {medicamento.get('cn')}")
-        st.write(f"**Laboratorio:** {detalle.get('titular')}")
-        st.write(f"**Estado de autorización:** {detalle.get('estado_autorizacion')}")
-        st.write(f"**Vía de administración:** {detalle.get('viaAdministracion')}")
-        st.write(f"**Principio activo:** {detalle.get('principiosActivos')}")
-        
-        if detalle.get("docs"):
-            doc_links = detalle["docs"]
-            for doc in doc_links:
-                tipo = doc.get("tipoDocumento")
-                enlace = f"https://cima.aemps.es/cima/dochtml/{doc.get('nombreArchivo')}"
-                st.write(f"[{tipo}]({enlace})")
-    else:
-        st.warning("No se encontraron medicamentos con ese nombre.")
+    respuesta = buscar_medicamento(nombre)
+    st.markdown(respuesta)
